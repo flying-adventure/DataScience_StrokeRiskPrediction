@@ -1,0 +1,135 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score, silhouette_samples
+from sklearn.cluster import KMeans
+from imblearn.over_sampling import SMOTE
+
+
+df = pd.read_csv("/content/drive/MyDrive/데이터/healthcare-dataset-stroke-data.csv")
+
+#id 컬럼 삭제
+df = df.drop(columns=['id'])
+
+# 결측치 확인
+df.isnull().sum()
+
+# 결측치 처리 (bmi 중앙값 대체)
+df['bmi'] = df['bmi'].fillna(df['bmi'].median())
+
+# 결측치 -> 중앙값으로 대체되었는지 확인용
+df.isnull().sum()
+
+# 원본 age, bmi 컬럼 보존 (이상치, 20세 미만, bmi>80 제거를 위해)
+raw = pd.read_csv('/content/drive/MyDrive/데이터/healthcare-dataset-stroke-data.csv')
+df['age_original'] = raw['age']
+df['bmi_original'] = pd.to_numeric(raw['bmi'], errors='coerce')
+
+# 나이 20세 미만 제거
+df = df[df['age_original'] >= 20]
+
+# z-score 정규화
+scaler = StandardScaler()
+
+# z-score 정규화 대상 컬럼 지정
+num_cols = ['age', 'avg_glucose_level', 'bmi']
+df[num_cols] = scaler.fit_transform(df[num_cols])
+
+# 나이의 z-score가 -3~3 사이만 남기기
+df = df[(df['age'] <= 3) & (df['age'] >= -3)]
+
+# gender가 'Other'인 행 제거
+df = df[df['gender'] != 'Other']
+
+# bmi가 80보다 큰 행 제거
+df = df[df['bmi_original'] <= 80]
+
+# 임시 컬럼 삭제
+df = df.drop(columns=['age_original', 'bmi_original'])
+
+# 범주형 변수 라벨 인코딩
+le_dict = {}
+for col in ['work_type', 'smoking_status', 'Residence_type', 'ever_married', 'gender']:
+    le = LabelEncoder()
+    df[col] = le.fit_transform(df[col])
+    le_dict[col] = dict(zip(le.classes_, le.transform(le.classes_)))
+
+X_corr_features = df.drop(columns=['stroke']).columns
+X_corr = df[X_corr_features] # 상관성 분석을 위한 X
+y_corr = df['stroke'] # target 컬럼
+
+X_feat_imp = df.drop(columns=['stroke']) 
+y_feat_imp = df['stroke']
+
+from sklearn.ensemble import ExtraTreesClassifier
+import pandas as pd
+import matplotlib.pyplot as plt
+
+model_feat_imp = ExtraTreesClassifier(random_state=30)
+model_feat_imp.fit(X_feat_imp, y_feat_imp)
+
+feat_importances = pd.Series(model_feat_imp.feature_importances_, index=X_feat_imp.columns)
+feat_importances.nlargest(10).plot(kind='barh')
+plt.show()
+
+# age, 글루코스 평균 수치, bmi 가 가장 큰 3요소로 나타남
+
+# smote test
+
+x = df.drop('stroke', axis=1) #타겟 속성
+y = df['stroke'] # 타겟
+
+smote = SMOTE(random_state=30)
+x_resampled, y_resampled = smote.fit_resample(x, y)
+
+print("Original dataset shape: ", y.value_counts())
+print("Resampled dataset shape: ", pd.Series(y_resampled).value_counts())
+
+# SMOTE로 생성된 데이터를 DataFrame으로 변환
+df_resampled = pd.DataFrame(x_resampled, columns=x.columns)
+df_resampled['stroke'] = y_resampled
+
+x = df_resampled.drop('stroke', axis=1)
+y = df_resampled['stroke']
+
+# 스케일링
+scaler = StandardScaler()
+x_scaled = scaler.fit_transform(x)
+x_scaled = pd.DataFrame(x_scaled, columns=x.columns)
+
+# 최적 K 탐색 (실루엣 점수 0.5 이상)
+best_k = 0
+best_score = -1
+silhouette_scores = []
+k_range = range(2, 11)
+for k in k_range:
+    kmeans = KMeans(n_clusters=k, random_state=30, n_init=20)
+    cluster_labels = kmeans.fit_predict(x_scaled)
+    score = silhouette_score(x_scaled, cluster_labels)
+    silhouette_scores.append(score)
+    print(f"K={k}: Silhouette Score={score:.4f}")
+    if score > best_score:
+        best_score = score
+        best_k = k
+
+print(f"\n최적 K: {best_k}, 최고 실루엣 점수: {best_score:.4f}")
+
+kmeans = KMeans(n_clusters=best_k, random_state=30, n_init=20)
+cluster_labels = kmeans.fit_predict(x_scaled)
+x_scaled['cluster_label'] = cluster_labels
+
+x_pca_df = pd.DataFrame(x_pca[:, :2], columns=['PC1', 'PC2'])
+x_pca_df['cluster_label'] = cluster_labels
+
+plt.figure(figsize=(10, 8))
+sns.scatterplot(x='PC1', y='PC2', hue='cluster_label', data=x_pca_df, palette='viridis', s=50, alpha=0.7)
+plt.title(f'K-Means Clustering (K={best_k}, Silhouette={best_score:.3f})')
+plt.xlabel(f'PC1 ({pca.explained_variance_ratio_[0]*100:.2f}%)')
+plt.ylabel(f'PC2 ({pca.explained_variance_ratio_[1]*100:.2f}%)')
+plt.legend(title='Cluster')
+plt.grid(True)
+plt.show()
