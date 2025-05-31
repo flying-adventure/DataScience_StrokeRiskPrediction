@@ -106,6 +106,12 @@ if __name__ == "__main__":
             'classification_report': report
         }
 
+    # 결과 출력
+    for name, res in results.items():
+        print(f"\n{name}")
+        print(f"Accuracy: {res['accuracy']:.4f}")
+        print(f"ROC AUC: {res['roc_auc']:.4f}")
+
     # 최고 성능 모델 자동 선택
     best_model_name = max(results.items(), key=lambda x: x[1]['roc_auc'])[0]
     best_model = models[best_model_name]
