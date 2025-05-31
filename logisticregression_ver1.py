@@ -12,6 +12,9 @@ from sklearn.metrics import classification_report, roc_auc_score, roc_curve, sil
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
+def stroke_prediction_pipeline_v1(df):
+    df = df.copy()
+
     # 1. 결측치 및 이상치 처리
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
     df = df[df['gender'] != 'Other']
