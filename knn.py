@@ -140,7 +140,7 @@ def stroke_prediction_pipeline_fixed_knn(df):
 
 
     # -----------------------------------------------
-    # 11. KNN 모델 (n_neighbors=5 고정) 상세 평가 보고서
+    # 11. KNN 모델 (n_neighbors=13 고정) 상세 평가 보고서
     # -----------------------------------------------
     print("\n[KNN 모델 (n_neighbors=13 고정) 상세 평가 보고서]")
 
