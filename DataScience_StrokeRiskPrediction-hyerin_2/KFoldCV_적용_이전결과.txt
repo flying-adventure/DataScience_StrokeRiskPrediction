@@ -1,0 +1,19 @@
+knn
+Accuracy: 0.8655
+ROC AUC: 0.9373
+
+logisticregression_ver1
+Accuracy: 0.8506
+ROC AUC: 0.9275
+
+logisticregression_ver2
+Accuracy: 0.8506
+ROC AUC: 0.9274
+
+randomforest_ver1
+Accuracy: 0.9297
+ROC AUC: 0.9848
+
+randomforest_ver2
+Accuracy: 0.9307
+ROC AUC: 0.9855
