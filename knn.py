@@ -13,7 +13,11 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve, auc, silhouette_score
 from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans    
+from sklearn.cluster import KMeans
+
+
+def stroke_prediction_pipeline_fixed_knn(df):
+    df = df.copy()
 
     # ------------------------
     # 1. 결측치 및 이상치 처리
@@ -129,6 +133,11 @@ from sklearn.cluster import KMeans
         X_clustered, y_res, test_size=0.25, random_state=42, stratify=y_res
     )
     print("데이터 분리 완료 (Train:", X_train.shape, "Test:", X_test.shape, ").")
+
+
+
+
+
 
     # -----------------------------------------------
     # 11. KNN 모델 (n_neighbors=5 고정) 상세 평가 보고서
