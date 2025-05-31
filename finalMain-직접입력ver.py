@@ -54,16 +54,6 @@ def preprocess_data(df):
     y = df_encoded['stroke']
     return X, y
 
-# 모델 학습 및 평가
-def train_and_evaluate(X_train, X_test, y_train, y_test, model):
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-    accuracy = accuracy_score(y_test, y_pred)
-    roc_auc = roc_auc_score(y_test, y_prob)
-    report = classification_report(y_test, y_pred, output_dict=True)
-    return accuracy, roc_auc, report
-
 # 새로운 환자 예측용 전처리 함수
 def preprocess_new_data(new_data_list, X_columns):
     df = pd.DataFrame(new_data_list)
