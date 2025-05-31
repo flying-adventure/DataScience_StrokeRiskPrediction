@@ -3,6 +3,11 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from imblearn.over_sampling import SMOTE
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
+from sklearn.metrics import (
+    accuracy_score, roc_auc_score, precision_score, 
+    recall_score, f1_score, average_precision_score, 
+    confusion_matrix, classification_report
+)
 import importlib.util
 import os
 
@@ -74,6 +79,42 @@ def preprocess_new_data(new_data_list, X_columns):
     df_encoded = df_encoded[X_columns]
     return df_encoded
 
+def train_and_evaluate(X_train, X_test, y_train, y_test, model):
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else model.decision_function(X_test)
+    
+    return {
+        'accuracy': accuracy_score(y_test, y_pred),
+        'roc_auc': roc_auc_score(y_test, y_proba),
+        'precision': precision_score(y_test, y_pred),
+        'recall': recall_score(y_test, y_pred),
+        'f1': f1_score(y_test, y_pred),
+        'pr_auc': average_precision_score(y_test, y_proba),
+        'confusion_matrix': confusion_matrix(y_test, y_pred),
+        'classification_report': classification_report(y_test, y_pred)
+    }
+
+# 2. 평가 결과 출력 및 비교 함수
+def compare_models(results):
+    # 테이블 헤더 출력
+    print(f"{'Model':<10} | {'Accuracy':<8} | {'ROC AUC':<8} | {'PR AUC':<8} | {'Precision':<8} | {'Recall':<8} | {'F1':<8}")
+    print("-" * 85)
+    
+    # 각 모델 지표 출력
+    for name, res in results.items():
+        print(f"{name:<10} | {res['accuracy']:.4f}   | {res['roc_auc']:.4f}   | {res['pr_auc']:.4f}   | "
+              f"{res['precision']:.4f}   | {res['recall']:.4f}   | {res['f1']:.4f}")
+
+# 최종 모델 선택 함수 (PR AUC 60%, Recall 40% 가중치)
+def select_best_model(results, weights={'pr_auc': 0.6, 'recall': 0.4}):
+    scores = {}
+    for name, res in results.items():
+        score = (res['pr_auc'] * weights['pr_auc'] + 
+                 res['recall'] * weights['recall'])
+        scores[name] = score
+    return max(scores.items(), key=lambda x: x[1])
+
 # 메인 실행 흐름
 if __name__ == "__main__":
     # 모델 동적 로드
@@ -99,24 +140,23 @@ if __name__ == "__main__":
     # 모델 평가
     results = {}
     for name, model in models.items():
-        accuracy, roc_auc, report = train_and_evaluate(X_train, X_test, y_train, y_test, model)
-        results[name] = {
-            'accuracy': accuracy,
-            'roc_auc': roc_auc,
-            'classification_report': report
-        }
+      results[name] = train_and_evaluate(X_train, X_test, y_train, y_test, model)
 
-    # 결과 출력
-    for name, res in results.items():
-        print(f"\n{name}")
-        print(f"Accuracy: {res['accuracy']:.4f}")
-        print(f"ROC AUC: {res['roc_auc']:.4f}")
+    # 결과 출력 
+    print("[모델 성능 비교 테이블]")
+    compare_models(results)
 
-    # 최고 성능 모델 자동 선택
-    best_model_name = max(results.items(), key=lambda x: x[1]['roc_auc'])[0]
+    # 최고 성능 모델 선택
+    best_model_name, best_score = select_best_model(results)
     best_model = models[best_model_name]
-    print(f"\n=== 최종 선택 모델: {best_model_name} ===")
-    print(f"ROC AUC: {results[best_model_name]['roc_auc']:.4f}")
+    print(f"\n=== 최종 선택 모델: {best_model_name} (종합 점수: {best_score:.4f}) ===")
+    print("주요 성능 지표:")
+    print(f"- ROC AUC: {results[best_model_name]['roc_auc']:.4f}")
+    print(f"- PR AUC: {results[best_model_name]['pr_auc']:.4f}")
+    print(f"- F1 Score: {results[best_model_name]['f1']:.4f}")
+    print(f"- Recall: {results[best_model_name]['recall']:.4f}")
+    print("\nConfusion Matrix:")
+    print(results[best_model_name]['confusion_matrix'])
 
     # 새로운 환자 데이터 예시
     new_patients_data = [
