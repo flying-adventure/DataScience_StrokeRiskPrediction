@@ -147,24 +147,94 @@ def select_best_model(results, weights={'roc_auc': 0.6, 'accuracy': 0.4}):
 # Patient information input function
 def input_patient_data():
     patients = []
-    num_patients = int(input("Enter the number of patients to predict: "))
+    num_patients = None
+    while num_patients is None:
+        try:
+            num_patients = int(input("Enter the number of patients to predict: "))
+            if num_patients <= 0:
+                print("You must enter at least 1 patient.")
+                num_patients = None
+        except ValueError:
+            print("Please enter a number.")
 
     for i in range(num_patients):
-        print(f"\nEnter patient {i+1} information:")
-        patient = {
-            'gender': input("Gender (Male/Female): ").strip(),
-            'age': float(input("Age (more than 19): ")),
-            'hypertension': int(input("Hypertension status (0: no, 1: yes): ")),
-            'heart_disease': int(input("Heart disease (0: no, 1: yes): ")),
-            'avg_glucose_level': float(input("Average Glucose Level: ")),
-            'bmi': float(input("BMI: ")),
-            'work_type': input("Work Type (Private/Self-employed/Govt_job/children/Never_worked): ").strip(),
-            'smoking_status': input("Smoking Status (never smoked/formerly smoked/smokes/Unknown): ").strip(),
-            'Residence_type': input("Residence Type (Urban/Rural): ").strip(),
-            'ever_married': input("Marital status (Yes/No): ").strip()
-        }
-        patients.append(patient)
-    return patients
+        print(f"\nEnter information for patient {i+1}:")
+
+        # gender
+        while True:
+            gender = input("Gender (Male/Female): ").strip()
+            if gender in ['Male', 'Female']:
+                break
+            print("Gender must be either 'Male' or 'Female'.")
+
+        # age
+        while True:
+            try:
+                age = float(input("Age: "))
+                if 20 <= age <= 120:
+                    break
+                else:
+                    print("Age must be between 20 and 120.")
+            except ValueError:
+                print("Please enter a number.")
+
+        # hypertension
+        while True:
+            try:
+                hypertension = int(input("Hypertension (0: No, 1: Yes): "))
+                if hypertension in [0, 1]:
+                    break
+                else:
+                    print("Only 0 or 1 is allowed.")
+            except ValueError:
+                print("Please enter a number.")
+
+        # heart_disease
+        while True:
+            try:
+                heart_disease = int(input("Heart disease (0: No, 1: Yes): "))
+                if heart_disease in [0, 1]:
+                    break
+                else:
+                    print("Only 0 or 1 is allowed.")
+            except ValueError:
+                print("Please enter a number.")
+
+        # avg_glucose_level
+        while True:
+            try:
+                avg_glucose_level = float(input("Average glucose level: "))
+                if 0 <= avg_glucose_level <= 500:
+                    break
+                else:
+                    print("Glucose level must be between 0 and 500.")
+            except ValueError:
+                print("Please enter a number.")
+
+        # bmi
+        while True:
+            try:
+                bmi = float(input("BMI: "))
+                if 10 <= bmi < 80:
+                    break
+                else:
+                    print("BMI must be between 10 and 80.")
+            except ValueError:
+                print("Please enter a number.")
+
+        # work_type
+        work_types = ['Private', 'Self-employed', 'Govt_job', 'children', 'Never_worked']
+        while True:
+            work_type = input("Work type (Private/Self-employed/Govt_job/children/Never_worked): ").strip()
+            if work_type in work_types:
+                break
+            print(f"Work type must be one of: {', '.join(work_types)}.")
+
+        # smoking_status
+        smoking_statuses = ['never smoked', 'formerly smoked', 'smokes', 'Unknown']
+        while True:
+            smoking_status = input("Smoking status (never smoked/formerly smoked/smokes/Unknown): ").strip
+
 
 
 
