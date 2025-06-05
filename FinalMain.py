@@ -11,11 +11,11 @@ import numpy as np
 
 # Set model file path
 MODEL_FILES = [
-    r"/content/drive/MyDrive/데이터/knn.py",
-    r"/content/drive/MyDrive/데이터/LogisticRegression_ver1.py",
-    r"/content/drive/MyDrive/데이터/LogisticRegression_ver2.py",
-    r"/content/drive/MyDrive/데이터/RandomForest_ver1.py",
-    r"/content/drive/MyDrive/데이터/RandomForest_ver2.py"
+    r"knn.py",
+    r"LogisticRegression_ver1.py",
+    r"LogisticRegression_ver2.py",
+    r"RandomForest_ver1.py",
+    r"RandomForest_ver2.py"
 ]
 
 # Function to classify loaded models
@@ -26,57 +26,12 @@ def load_models_from_files():
         spec = importlib.util.spec_from_file_location(model_name, filepath)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-
-        if 'knn' in filepath:
-            models[model_name] = module.KNeighborsClassifier(
-                n_neighbors=13, weights='uniform', p=2
-            )
-        elif 'LogisticRegression' in filepath:
-            if 'ver2' in filepath:
-                models[model_name] = module.LogisticRegression(
-                    C=0.1, penalty='l1', solver='liblinear', random_state=42
-                )
-            else:
-                models[model_name] = module.LogisticRegression(
-                    C=1, penalty='l2', solver='liblinear', random_state=42
-                )
-        elif 'RandomFores' in filepath:
-            if 'ver2' in filepath:
-                models[model_name] = module.RandomForestClassifier(
-                    n_estimators=200, max_depth=20, random_state=42
-                )
-            else:
-                models[model_name] = module.RandomForestClassifier(
-                    n_estimators=100, max_depth=None, random_state=42
-                )
+        models[model_name] = module.get_model()
     return models
 
 # Data pre-processing Function
 def preprocess_data(df):
     df = df.copy()
-    
-    # 1. Check missing values
-    missing_values = df.isnull().sum()
-    # 2. Check class imbalance (stroke distribution)
-    stroke_distribution = df['stroke'].value_counts(normalize=True) * 100
-
-    # 3. Visualize outliers using scatter plots
-    plt.figure(figsize=(15, 5))
-    # age vs bmi
-    plt.subplot(1, 2, 1)
-    sns.scatterplot(data=df, x='age', y='bmi', alpha=0.5)
-    plt.title('Scatter Plot: Age vs BMI')
-    # age vs avg_glucose_level
-    plt.subplot(1, 2, 2)
-    sns.scatterplot(data=df, x='age', y='avg_glucose_level', alpha=0.5)
-    plt.title('Scatter Plot: Age vs Avg Glucose Level')
-    plt.tight_layout()
-    plt.show()
-    # Return missing value counts and class imbalance
-    print(missing_values)
-    print(stroke_distribution)
-
-    
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
     df = df[df['gender'] != 'Other']
     df = df[df['age'] >= 20]
@@ -87,37 +42,24 @@ def preprocess_data(df):
     y = df_encoded['stroke']
     return X, y
 
-# Function to evaluate models based on K-Fold (evaluates separately configured models,
-# independent of kfoldcross.py; k is obtained from kfoldcross.py)
+# Function to evaluate models based on K-Fold
 def cross_validate_model(model, X, y, k):
     skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
     acc_scores = []
     auc_scores = []
-
-    fold = 1
     for train_idx, test_idx in skf.split(X, y):
-        print(f"Evaluating Fold {fold}...")
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-
         smote = SMOTE(random_state=42)
-        X_train_res, y_train_res = smote.fit_resample(X_train, y_train) #  SMOTE is applied only to the training set
-
+        X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train_res)
         X_test_scaled = scaler.transform(X_test)
-
         model.fit(X_train_scaled, y_train_res)
         y_pred = model.predict(X_test_scaled)
         y_prob = model.predict_proba(X_test_scaled)[:, 1]
-
-        acc = accuracy_score(y_test, y_pred)
-        auc = roc_auc_score(y_test, y_prob)
-        acc_scores.append(acc)
-        auc_scores.append(auc)
-
-        fold += 1
-
+        acc_scores.append(accuracy_score(y_test, y_pred))
+        auc_scores.append(roc_auc_score(y_test, y_prob))
     return np.mean(acc_scores), np.mean(auc_scores)
 
 # Preprocessing function for new patient predictions.
@@ -128,21 +70,21 @@ def preprocess_new_data(new_data_list, X_columns):
     df = df[df['bmi'] < 80]
     categorical_cols = ['gender', 'ever_married', 'Residence_type', 'work_type', 'smoking_status']
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True, dtype=int)
-    # Correct for missing columns
     for col in X_columns:
         if col not in df_encoded.columns:
             df_encoded[col] = 0
     df_encoded = df_encoded[X_columns]
     return df_encoded
 
-# Final model selection function (ROC AUC 60%, Accuracy 40% weight)
+# Final model selection function
 def select_best_model(results, weights={'roc_auc': 0.6, 'accuracy': 0.4}):
     scores = {}
     for name, res in results.items():
         score = (res['roc_auc'] * weights['roc_auc'] +
                  res['accuracy'] * weights['accuracy'])
         scores[name] = score
-    return max(scores.items(), key=lambda x: x[1])
+    best_model_name = max(scores, key=scores.get)
+    return best_model_name, scores[best_model_name]
 
 # Patient information input function
 def input_patient_data():
@@ -160,69 +102,13 @@ def input_patient_data():
     for i in range(num_patients):
         print(f"\nEnter information for patient {i+1}:")
 
-        # gender
-        while True:
-            gender = input("Gender (Male/Female): ").strip()
-            if gender in ['Male', 'Female']:
-                break
-            print("Gender must be either 'Male' or 'Female'.")
+        gender = input("Gender (Male/Female): ").strip()
+        age = float(input("Age: "))
+        hypertension = int(input("Hypertension (0: No, 1: Yes): "))
+        heart_disease = int(input("Heart disease (0: No, 1: Yes): "))
+        avg_glucose_level = float(input("Average glucose level: "))
+        bmi = float(input("BMI: "))
 
-        # age
-        while True:
-            try:
-                age = float(input("Age: "))
-                if 20 <= age <= 120:
-                    break
-                else:
-                    print("Age must be between 20 and 120.")
-            except ValueError:
-                print("Please enter a number.")
-
-        # hypertension
-        while True:
-            try:
-                hypertension = int(input("Hypertension (0: No, 1: Yes): "))
-                if hypertension in [0, 1]:
-                    break
-                else:
-                    print("Only 0 or 1 is allowed.")
-            except ValueError:
-                print("Please enter a number.")
-
-        # heart_disease
-        while True:
-            try:
-                heart_disease = int(input("Heart disease (0: No, 1: Yes): "))
-                if heart_disease in [0, 1]:
-                    break
-                else:
-                    print("Only 0 or 1 is allowed.")
-            except ValueError:
-                print("Please enter a number.")
-
-        # avg_glucose_level
-        while True:
-            try:
-                avg_glucose_level = float(input("Average glucose level: "))
-                if 0 <= avg_glucose_level <= 500:
-                    break
-                else:
-                    print("Glucose level must be between 0 and 500.")
-            except ValueError:
-                print("Please enter a number.")
-
-        # bmi
-        while True:
-            try:
-                bmi = float(input("BMI: "))
-                if 10 <= bmi < 80:
-                    break
-                else:
-                    print("BMI must be between 10 and 80.")
-            except ValueError:
-                print("Please enter a number.")
-
-        # work_type
         work_types = ['Private', 'Self-employed', 'Govt_job', 'children', 'Never_worked']
         while True:
             work_type = input("Work type (Private/Self-employed/Govt_job/children/Never_worked): ").strip()
@@ -230,25 +116,30 @@ def input_patient_data():
                 break
             print(f"Work type must be one of: {', '.join(work_types)}.")
 
-        # smoking_status
         smoking_statuses = ['never smoked', 'formerly smoked', 'smokes', 'Unknown']
         while True:
-            smoking_status = input("Smoking status (never smoked/formerly smoked/smokes/Unknown): ").strip
+            smoking_status = input("Smoking status (never smoked/formerly smoked/smokes/Unknown): ").strip()
+            if smoking_status in smoking_statuses:
+                break
+            print(f"Smoking status must be one of: {', '.join(smoking_statuses)}.")
 
-
-
+        patients.append({
+            "gender": gender,
+            "age": age,
+            "hypertension": hypertension,
+            "heart_disease": heart_disease,
+            "avg_glucose_level": avg_glucose_level,
+            "bmi": bmi,
+            "work_type": work_type,
+            "smoking_status": smoking_status
+        })
+    return patients
 
 # Running Main Function
 if __name__ == "__main__":
-
-    # Load Model
     models = load_models_from_files()
-
-    # Load Data
-    df = pd.read_csv("/content/drive/MyDrive/데이터/healthcare-dataset-stroke-data.csv")
-
-    # Dynamic import and function call of kfoldcross.py (only finding optimal k here)
-    kfoldcross_path = r"/content/drive/MyDrive/데이터/kfoldcross.py"
+    df = pd.read_csv("healthcare-dataset-stroke-data.csv")
+    kfoldcross_path = r"kfoldcross.py"
     spec = importlib.util.spec_from_file_location("kfoldcross", kfoldcross_path)
     kfoldcross = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kfoldcross)
@@ -258,10 +149,7 @@ if __name__ == "__main__":
     print(f"Optional K: {best_k}")
     print(f"AUC values per K: {k_auc_dict}")
 
-    # Pre-Processing
     X, y = preprocess_data(df)
-
-    # Cross-validation per model
     results = {}
     for name, model in models.items():
         print(f"\n▶ Model: {name}")
@@ -269,42 +157,46 @@ if __name__ == "__main__":
         results[name] = {'accuracy': acc, 'roc_auc': auc}
         print(f"[{name}] Average Accuracy: {acc:.4f}, Average ROC AUC: {auc:.4f}")
 
-    # Output Final Results
     print("\n⭐Final Evaluation Results per Model⭐")
     for name, res in results.items():
         print(f"<{name}>")
         print(f"Accuracy: {res['accuracy']:.4f}, ROC AUC: {res['roc_auc']:.4f}")
 
-    # Select Best Performing Model
+    model_names = list(results.keys())
+    accuracies = [results[m]['accuracy'] for m in model_names]
+    roc_aucs = [results[m]['roc_auc'] for m in model_names] 
+    x = np.arange(len(model_names))
+    width = 0.35
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width/2, accuracies, width, label='Accuracy')
+    plt.bar(x + width/2, roc_aucs, width, label='ROC AUC')
+    plt.ylabel('Score')
+    plt.title('Model Performance Comparison')
+    plt.xticks(x, model_names, rotation=45)
+    plt.ylim(0, 1)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
     best_model_name, best_score = select_best_model(results)
     best_model = models[best_model_name]
     print(f"\n=== Final Selected Model: {best_model_name} (Overall Score: {best_score:.4f}) ===")
 
-    # Re-train on the entire dataset and define the scaler
     print("\n=== Re-train Final Model ===")
     X, y = preprocess_data(df)
-    
-    # Apply SMOTE (entire dataset)
     smote = SMOTE(random_state=42)
     X_res, y_res = smote.fit_resample(X, y)
-    
-    # Re-define and train the scaler
     global_scaler = StandardScaler()
     X_scaled = global_scaler.fit_transform(X_res)
-    
-    # Re-train the final model
     best_model.fit(X_scaled, y_res)
-  
-    # Receive patient data as user input
+
     print("\n=== Input new patient information ===")
     new_patients_data = input_patient_data()
-
-    # Preprocess prediction data
     X_new = preprocess_new_data(new_patients_data, X.columns)
     X_new_scaled = global_scaler.transform(X_new)
-
-    # Predict and output results
     probs = best_model.predict_proba(X_new_scaled)[:, 1]
+
     for i, prob in enumerate(probs):
         print(f"\n--- Patient {i+1} ---")
         print(f"Input data: {new_patients_data[i]}")
