@@ -145,6 +145,17 @@ def cross_validate_model(model, X, y, k):
 
     return np.mean(acc_scores), np.mean(auc_scores)
 
+def plot_model_comparison(results):
+    df_plot = pd.DataFrame(results).T
+    df_plot = df_plot[['accuracy', 'roc_auc']]
+    df_plot.plot(kind='bar', figsize=(10,6))
+    plt.title('Model Performance Comparison')
+    plt.ylabel('Score')
+    plt.xticks(rotation=45)
+    plt.ylim(0, 1)
+    plt.tight_layout()
+    plt.show()   
+    
 # Preprocessing function for new patient predictions.
 def preprocess_new_data(new_data_list, X_columns):
     df = pd.DataFrame(new_data_list)
@@ -314,7 +325,7 @@ if __name__ == "__main__":
     spec.loader.exec_module(kfoldcross)
 
     print("▶ Finding Optimal K (K-Fold Cross Validation) in progress...")
-    X, y = preprocess_data(df)
+    X, y = preprocess_data(df, plot=True)
     best_k, k_auc_dict = kfoldcross.find_best_k_and_evaluate(X, y)
 
     print(f"Optional K: {best_k}")
@@ -333,11 +344,14 @@ if __name__ == "__main__":
     for name, res in results.items():
         print(f"<{name}>")
         print(f"Accuracy: {res['accuracy']:.4f}, ROC AUC: {res['roc_auc']:.4f}")
-
+        
+    plot_model_comparison(results)
+    
     # Select Best Performing Model
     best_model_name, best_score = select_best_model(results)
     best_model = models[best_model_name]
     print(f"\n=== Final Selected Model: {best_model_name} (Overall Score: {best_score:.4f}) ===")
+    
 
     # Re-train on the entire dataset and define the scaler
     print("\n=== Re-train Final Model ===")
