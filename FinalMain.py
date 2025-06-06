@@ -12,8 +12,7 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 
-
-# Set model file path
+# List of model file paths
 MODEL_FILES = [
     r"knn.py",
     r"LogisticRegression_ver1.py",
@@ -22,7 +21,8 @@ MODEL_FILES = [
     r"RandomForest_ver2.py"
 ]
 
-# Function to load models using get_model() from each file
+# Dynamically load models from Python files using get_model() function
+
 def load_models_from_files():
     models = {}
     for filepath in MODEL_FILES:
@@ -30,52 +30,52 @@ def load_models_from_files():
         spec = importlib.util.spec_from_file_location(model_name, filepath)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-
-        # Use the get_model() function from each module
-        models[model_name] = module.get_model()
-
+        models[model_name] = module.get_model()  # Load model instance
     return models
 
-
-# Data pre-processing Function
+# Data preprocessing function with optional visualization
 def preprocess_data(df, plot=False):
     df = df.copy()
-    
+
     if plot:
-        # 1. Check missing values
+        # 1. Display missing values per column
         missing_values = df.isnull().sum()
-        # 2. Check class imbalance (stroke distribution)
+        # 2. Display class distribution for target label 'stroke'
         stroke_distribution = df['stroke'].value_counts(normalize=True) * 100
 
-        # 3. Visualize outliers using scatter plots
+        # 3. Visualize potential outliers
         plt.figure(figsize=(15, 5))
-        # age vs bmi
         plt.subplot(1, 2, 1)
         sns.scatterplot(data=df, x='age', y='bmi', alpha=0.5)
         plt.title('Scatter Plot: Age vs BMI')
-        # age vs avg_glucose_level
         plt.subplot(1, 2, 2)
         sns.scatterplot(data=df, x='age', y='avg_glucose_level', alpha=0.5)
         plt.title('Scatter Plot: Age vs Avg Glucose Level')
         plt.tight_layout()
         plt.show()
 
-        # Print info
         print(missing_values)
         print(stroke_distribution)
 
+    # Fill missing BMI values with median
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
+    # Remove rows with undefined gender
     df = df[df['gender'] != 'Other']
+    # Keep adults (age >= 20)
     df = df[df['age'] >= 20]
+    # Remove outliers with extreme BMI values
     df = df[df['bmi'] < 80]
+
+    # One-hot encode categorical variables
     categorical_cols = ['gender', 'ever_married', 'Residence_type', 'work_type', 'smoking_status']
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True, dtype=int)
+
     X = df_encoded.drop(columns=['stroke', 'id'])
     y = df_encoded['stroke']
     return X, y
 
+# KMeans clustering with silhouette score and PCA visualization
 def run_clustering_analysis(X_scaled, y_res):
-    # K-Means 클러스터 개수 최적화
     best_k, best_score = 0, -1
     for k in range(2, 11):
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
@@ -85,22 +85,24 @@ def run_clustering_analysis(X_scaled, y_res):
             best_k, best_score = k, score
 
     print(f"\n[Clustering] Best K: {best_k}, Silhouette Score: {best_score:.4f}")
-    
-    # 최적 K로 클러스터링 수행
+
+    # Final clustering with best_k
     kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
     cluster_labels = kmeans.fit_predict(X_scaled)
 
-    # PCA 시각화
+    # Reduce dimensions using PCA for visualization
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X_scaled)
     pca_df = pd.DataFrame(X_pca, columns=['PC1', 'PC2'])
     pca_df['cluster'] = cluster_labels
+
+    # Visualize clusters
     sns.scatterplot(data=pca_df, x='PC1', y='PC2', hue='cluster', palette='Set2')
     plt.title('PCA Clustering Visualization')
     plt.tight_layout()
     plt.show()
 
-    # 클러스터별 뇌졸중 비율 출력
+    # Stroke distribution by cluster
     X_clustered = pd.DataFrame(X_scaled, columns=X.columns)
     X_clustered['cluster_label'] = cluster_labels
     df_cluster = X_clustered.copy()
@@ -108,12 +110,9 @@ def run_clustering_analysis(X_scaled, y_res):
     print("\n[Stroke ratio statistics by cluster]")
     print(df_cluster.groupby('cluster_label')['stroke'].value_counts(normalize=True).unstack().fillna(0))
 
-    return X_clustered  # 이후에 train_test_split 등에 사용할 수 있음
+    return X_clustered
 
-
-
-# Function to evaluate models based on K-Fold (evaluates separately configured models,
-# independent of kfoldcross.py; k is obtained from kfoldcross.py)
+# Evaluate model performance using Stratified K-Fold Cross-Validation
 def cross_validate_model(model, X, y, k):
     skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
     acc_scores = []
@@ -124,10 +123,10 @@ def cross_validate_model(model, X, y, k):
         print(f"Evaluating Fold {fold}...")
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
         y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-         # SMOTE
+
         smote = SMOTE(random_state=42)
-        X_train_res, y_train_res = smote.fit_resample(X_train, y_train) #  SMOTE is applied only to the training set
-        # Scaling
+        X_train_res, y_train_res = smote.fit_resample(X_train, y_train)  # Apply SMOTE only to training set
+
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train_res)
         X_test_scaled = scaler.transform(X_test)
@@ -136,15 +135,13 @@ def cross_validate_model(model, X, y, k):
         y_pred = model.predict(X_test_scaled)
         y_prob = model.predict_proba(X_test_scaled)[:, 1]
 
-        acc = accuracy_score(y_test, y_pred)
-        auc = roc_auc_score(y_test, y_prob)
-        acc_scores.append(acc)
-        auc_scores.append(auc)
-
+        acc_scores.append(accuracy_score(y_test, y_pred))
+        auc_scores.append(roc_auc_score(y_test, y_prob))
         fold += 1
 
     return np.mean(acc_scores), np.mean(auc_scores)
 
+# Plot bar chart comparing model performance
 def plot_model_comparison(results):
     df_plot = pd.DataFrame(results).T
     df_plot = df_plot[['accuracy', 'roc_auc']]
@@ -154,9 +151,9 @@ def plot_model_comparison(results):
     plt.xticks(rotation=45)
     plt.ylim(0, 1)
     plt.tight_layout()
-    plt.show()   
-    
-# Preprocessing function for new patient predictions.
+    plt.show()
+
+# Process input patient data and format as encoded DataFrame for prediction
 def preprocess_new_data(new_data_list, X_columns):
     df = pd.DataFrame(new_data_list)
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
@@ -164,23 +161,27 @@ def preprocess_new_data(new_data_list, X_columns):
     df = df[df['bmi'] < 80]
     categorical_cols = ['gender', 'ever_married', 'Residence_type', 'work_type', 'smoking_status']
     df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True, dtype=int)
-    # Correct for missing columns
     for col in X_columns:
         if col not in df_encoded.columns:
             df_encoded[col] = 0
     df_encoded = df_encoded[X_columns]
     return df_encoded
 
-# Final model selection function (ROC AUC 60%, Accuracy 40% weight)
+# Select the best model based on a weighted scoring system
+# The default weights prioritize ROC AUC (60%) over Accuracy (40%)
 def select_best_model(results, weights={'roc_auc': 0.6, 'accuracy': 0.4}):
     scores = {}
     for name, res in results.items():
-        score = (res['roc_auc'] * weights['roc_auc'] +
-                 res['accuracy'] * weights['accuracy'])
+        # Compute weighted score for each model
+        score = (res['roc_auc'] * weights['roc_auc'] + res['accuracy'] * weights['accuracy'])
         scores[name] = score
+    # Return model with the highest overall score
     return max(scores.items(), key=lambda x: x[1])
 
-# Patient information input function
+# Function to collect patient information from the user through CLI inputs
+# Ensures data integrity and valid ranges for each input
+# Returns a list of dictionaries, each representing one patient
+
 def input_patient_data():
     patients = []
     num_patients = None
@@ -196,14 +197,14 @@ def input_patient_data():
     for i in range(num_patients):
         print(f"\nEnter information for patient {i+1}:")
 
-        # gender
+        # Gender
         while True:
             gender = input("Gender (Male/Female): ").strip()
             if gender in ['Male', 'Female']:
                 break
             print("Gender must be either 'Male' or 'Female'.")
 
-        # age
+        # Age
         while True:
             try:
                 age = float(input("Age: "))
@@ -214,7 +215,7 @@ def input_patient_data():
             except ValueError:
                 print("Please enter a number.")
 
-        # hypertension
+        # Hypertension
         while True:
             try:
                 hypertension = int(input("Hypertension (0: No, 1: Yes): "))
@@ -225,7 +226,7 @@ def input_patient_data():
             except ValueError:
                 print("Please enter a number.")
 
-        # heart_disease
+        # Heart disease
         while True:
             try:
                 heart_disease = int(input("Heart disease (0: No, 1: Yes): "))
@@ -236,7 +237,7 @@ def input_patient_data():
             except ValueError:
                 print("Please enter a number.")
 
-        # avg_glucose_level
+        # Average glucose level
         while True:
             try:
                 avg_glucose_level = float(input("Average glucose level: "))
@@ -247,7 +248,7 @@ def input_patient_data():
             except ValueError:
                 print("Please enter a number.")
 
-        # bmi
+        # BMI
         while True:
             try:
                 bmi = float(input("BMI: "))
@@ -258,7 +259,7 @@ def input_patient_data():
             except ValueError:
                 print("Please enter a number.")
 
-        # work_type
+        # Work type selection
         work_types = ['Private', 'Self-employed', 'Govt_job', 'children', 'Never_worked']
         while True:
             work_type = input("Work type (Private/Self-employed/Govt_job/children/Never_worked): ").strip()
@@ -266,7 +267,7 @@ def input_patient_data():
                 break
             print(f"Work type must be one of: {', '.join(work_types)}.")
 
-        # smoking_status
+        # Smoking status
         smoking_statuses = ['never smoked', 'formerly smoked', 'smokes', 'Unknown']
         while True:
             smoking_status = input("Smoking status (never smoked/formerly smoked/smokes/Unknown): ").strip()
@@ -281,14 +282,14 @@ def input_patient_data():
                 break
             print("Residence type must be either 'Urban' or 'Rural'.")
 
-        # ever_married
+        # Marital status
         while True:
             ever_married = input("Marital Status (Yes/No): ").strip()
             if ever_married in ['Yes', 'No']:
                 break
             print("Marital status must be 'Yes' or 'No'.")
 
-        # patient dictionary
+        # Aggregate patient input into dictionary format
         patient = {
             'gender': gender,
             'age': age,
@@ -305,9 +306,6 @@ def input_patient_data():
         patients.append(patient)
 
     return patients
-
-
-
 
 # Running Main Function
 if __name__ == "__main__":
