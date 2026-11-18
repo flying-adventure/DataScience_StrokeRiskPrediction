@@ -293,4 +293,3 @@ Dataset: Kaggle Healthcare Stroke Dataset
 📊 최종 보고서: DataScience_D_FinalReport.docx
 🎯 프로젝트 제안: DataScience_TermProject_proposal_D조.pptx
 🎤 최종 발표 자료: termproject_groupD.pptx
-Claude Haiku 4.5 • 1x
